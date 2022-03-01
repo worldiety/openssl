@@ -1,0 +1,91 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "${WDY_XBUILD_ROOT}" ]; then
+	echo "WDY_XBUILD_ROOT not set"
+	exit 1
+fi
+
+SRC=$(dirname $(readlink -f "$0"))
+
+PREFIXES="x86_64 x86 armeabi-v7a arm64-v8a  linux"
+
+
+abort() {
+	echo "$*" > /dev/stderr
+	exit 127
+}
+
+
+ssl_prefix() {
+	case $1 in
+	armeabi-v7a) echo "android-arm" ;;
+	arm64-v8a) echo "android-arm64" ;;
+	x86) echo "android-x86" ;;
+	x86_64) echo "android-x86_64" ;;
+	linux) echo "" ;;
+	*)
+		abort "Unknown arch: $1"
+		;;	
+	esac
+}
+
+SSL_LDFLAGS=
+SSL_CFLAGS=
+SSL_CONF_FLAGS=
+flags() {
+	SSL_LDFLAGS=
+	SSL_CFLAGS=
+	SSL_CONF_FLAGS=
+
+	case $1 in
+	armeabi-v7a|arm64-v8a|x86|x86_64)
+		# clang builds need -latomic
+		SSL_LDFLAGS="-latomic"
+		SSL_CONF_FLAGS="-D__ANDROID_API__=21"
+		;;
+	linux) echo "" ;;
+	*)
+		abort "Unknown arch: $1"
+		;;	
+	esac
+	
+#	case $1 in
+#	x86_64)
+		# the x86_64 assembly in libcrypto seems broken for android x64 when using clang
+#		SSL_CFLAGS="{SSL_CFLAGS} -DWDY_NO_ASM=1"
+#		;;
+#	esac
+}
+
+
+
+build() {
+	ARCH=$1
+	SSL_PREFIX=$(ssl_prefix ${ARCH})
+		
+	. ${WDY_XBUILD_ROOT}/bin/android-env ${ARCH}	
+	
+	flags ${ARCH}
+	export LDFLAGS="${LDFLAGS} ${SSL_LDFLAGS}"
+	export CFLAGS="${CFLAGS} ${SSL_CFLAGS}"
+	${SRC}/Configure ${SSL_PREFIX} --prefix=${WDY_XBUILD_ROOT}/${ARCH} ${SSL_CONF_FLAGS}
+	
+	
+	
+	make -j8
+	make install_sw
+}
+
+for ARCH in ${PREFIXES}; do
+	BLD=$(mktemp -d -t openssl-build-XXXXXXXXX)
+	cd ${BLD}
+	( build ${ARCH} )
+	rm -rf ${BLD}
+done
+
+${WDY_XBUILD_ROOT}/bin/prepare_libraries.sh
+
+
+
