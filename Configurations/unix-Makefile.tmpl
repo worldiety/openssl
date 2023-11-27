@@ -1438,7 +1438,7 @@ FORCE:
 libcrypto.pc libssl.pc openssl.pc: Makefile $(LIBS) {- join(" ",map { platform->sharedlib_simple($_) // platform->sharedlib_import($_) // platform->sharedlib($_) // () } @{$unified_info{libraries}}) -}
 
 libcrypto.pc:
-	@ ( echo 'prefix=$(INSTALLTOP)'; \
+	@ ( echo 'prefix=$${pcfiledir}/../..'; \
 	    echo 'exec_prefix=$${prefix}'; \
 	    if [ -n "$(LIBDIR)" ]; then \
 	        echo 'libdir=$${exec_prefix}/$(LIBDIR)'; \
@@ -1457,7 +1457,7 @@ libcrypto.pc:
 	    echo 'Cflags: -I$${includedir}' ) > libcrypto.pc
 
 libssl.pc:
-	@ ( echo 'prefix=$(INSTALLTOP)'; \
+	@ ( echo 'prefix=$${pcfiledir}/../..'; \
 	    echo 'exec_prefix=$${prefix}'; \
 	    if [ -n "$(LIBDIR)" ]; then \
 	        echo 'libdir=$${exec_prefix}/$(LIBDIR)'; \
@@ -1474,7 +1474,7 @@ libssl.pc:
 	    echo 'Cflags: -I$${includedir}' ) > libssl.pc
 
 openssl.pc:
-	@ ( echo 'prefix=$(INSTALLTOP)'; \
+	@ ( echo 'prefix=$${pcfiledir}/../..'; \
 	    echo 'exec_prefix=$${prefix}'; \
 	    if [ -n "$(LIBDIR)" ]; then \
 	        echo 'libdir=$${exec_prefix}/$(LIBDIR)'; \
