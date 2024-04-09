@@ -7,7 +7,7 @@ from conan.tools.env import Environment
 
 class FFmpegConan(ConanFile):
     name = "openssl"
-    version = "3.2.1"
+    version = "3.3.0"
 
     description = "openssl tls and crypto library"
     topics = ("audio", "video")
