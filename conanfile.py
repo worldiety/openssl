@@ -1,9 +1,6 @@
-from conans import ConanFile, AutoToolsBuildEnvironment, tools, VisualStudioBuildEnvironment
-from conans.errors import ConanInvalidConfiguration
 import os, re
-import shutil
-from conan.tools.files import replace_in_file
-from conan.tools.env import Environment
+from conan import ConanFile, tools
+from conan.tools.gnu import AutotoolsToolchain
 
 class FFmpegConan(ConanFile):
     name = "openssl"
@@ -103,35 +100,35 @@ class FFmpegConan(ConanFile):
         
         
         
-    def configure_env(self):
-        vars = self.configure_vars()
-        for f in [ "CFLAGS", "CXXFLAGS", "LDFLAGS", "CPPFLAGS", "CXXCPPFLAGS" ]:
-            if f in os.environ: self._append_def(vars, f, os.environ[f])
-            
-        debug_prefix_mapping = f'-ffile-prefix-map="{os.path.abspath(self.source_folder)}"="{os.path.join("conan-pkg", self.name)}"'
-        self._append_def(vars, "CFLAGS", debug_prefix_mapping)
-        self._append_def(vars, "CXXFLAGS", debug_prefix_mapping)
+    def configure_autotools(self, tc: AutotoolsToolchain):        
+        tc.extra_cflags.append(os.environ.get("CFLAGS", ""))
+        tc.extra_cxxflags.append(os.environ.get("CXXFLAGS", ""))
+        tc.extra_ldflags.append(os.environ.get("LDFLAGS", ""))
 
-        self._append_def(vars, "CFLAGS", "-fexceptions")
-        self._append_def(vars, "CXXFLAGS", "-fexceptions")
+        cpp_flag = lambda x: (tc.extra_cflags.append(x), tc.extra_cxxflags.append(x))
+
+        debug_prefix_mapping = f'-ffile-prefix-map="{os.path.abspath(self.source_folder)}"="{os.path.join("conan-pkg", self.name)}"'
+        cpp_flag(debug_prefix_mapping)
+        cpp_flag("-fexceptions")
         
         if self.settings.os == "Linux":
-            self._append_def(vars, "LDFLAGS", "-Wl,--enable-new-dtags")
+            tc.extra_ldflags.append("-Wl,--enable-new-dtags")
             
         buildStatic = hasattr(self.options, "shared") and not getattr(self.options, "shared")
             
         if hasattr(self.settings, "os") and getattr(self.settings, "os") != "Windows":
             wantsPIC = hasattr(self.options, "fPIC") and getattr(self.options, "fPIC")
             if wantsPIC or not buildStatic:
-                self._append_def(vars, "CFLAGS", "-fPIC")
-                self._append_def(vars, "CXXFLAGS", "-fPIC")
+                cpp_flag("-fPIC")                
+        
+        if self.deps_env_info.SYSROOT:
+                if self.settings.compiler in [ "clang", "apple-clang" ] and tools.apple.is_apple_os(self):
+                    cpp_flag(f"-isysroot {self.deps_env_info.SYSROOT}")                    
+                else:
+                    cpp_flag(f"--sysroot={self.deps_env_info.SYSROOT}")                    
 
-        return vars
-        
-        
-        
-    def configure_args(self):
-        return [
+        tc.configure_args.clear()
+        tc.configure_args += [
             *self._std_options(),
             *self._library_options(),
             *self._build_options(),            
@@ -139,32 +136,19 @@ class FFmpegConan(ConanFile):
         
         
     def build(self):
-        args = list( map(lambda x: f"'{x}'", self.configure_args()) )
+        tc = self._init_autotools()
+        args = list( map(lambda x: f"'{x}'", tc.configure_args) )
         args = " ".join(args)
         
-        with self.python_requires["wdyConanHelper"].module.utils.dependencies_environment(self, True).apply():            
-            v = self.configure_env()            
-                                        
-            if self.deps_env_info.SYSROOT:
-                if self.settings.compiler in [ "clang", "apple-clang" ] and tools.is_apple_os(self.settings.os):
-                    self._append_def(v, "CFLAGS", f"-isysroot {self.deps_env_info.SYSROOT}")
-                    self._append_def(v, "CXXFLAGS", f"-isysroot {self.deps_env_info.SYSROOT}")
-                else:
-                    self._append_def(v, "CFLAGS", f"--sysroot={self.deps_env_info.SYSROOT}")
-                    self._append_def(v, "CXXFLAGS", f"--sysroot={self.deps_env_info.SYSROOT}")
-            
-            env = Environment()
-            for k,v in v.items():
-                env.define(k, v)                
-                
-            with env.vars(self).apply():
+        with self.python_requires["wdyConanHelper"].module.utils.dependencies_environment(self, True).apply():                        
+            with tc.environment().vars(self).apply():            
                 self.output.info("configure-args: "+args)
                 self.run("./Configure "+args)
-                self.run(f"make -j{tools.cpu_count()}")
+                self.run(f"make -j{tools.build.build_jobs(self)}")
         
         
     def package(self):
-        self.run(f"make install_sw install_ssldirs -j{tools.cpu_count()}")
-        tools.remove_files_by_mask(os.path.join(self.package_folder, "lib"), "*.la")
+        self.run(f"make install_sw install_ssldirs -j{tools.build.build_jobs(self)}")
+        tools.files.rm(self, "*.la", os.path.join(self.package_folder, "lib"))
         
 
