@@ -1,6 +1,7 @@
-libdir={- $OpenSSL::safe::installdata::LIBDIR -}
-includedir={- $OpenSSL::safe::installdata::INCLUDEDIR -}
-enginesdir={- $OpenSSL::safe::installdata::ENGINESDIR -}
+prefix=${pcfiledir}/../..
+libdir=${prefix}/lib
+includedir=${prefix}/include
+enginesdir={prefix}/lib{- $OpenSSL::safe::installdata::ENGINESDIR -}
 modulesdir={- $OpenSSL::safe::installdata::MODULESDIR -}
 
 Name: OpenSSL-libcrypto
